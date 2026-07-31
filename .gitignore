@@ -1,0 +1,18 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Test, type-checker, linter, and coverage caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+
+# Editor swap and backup files
+*.swp
+*.swo
+*~
+
+# OS metadata
+.DS_Store
+Thumbs.db

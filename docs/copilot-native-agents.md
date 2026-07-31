@@ -18,12 +18,11 @@ isolated-context factual scout and read planner: it can absorb broad discovery
 and reduce reads in the parent's context, but each other specialized role still
 grounds itself directly and every vetter inspects its own evidence.
 
-This role is distinct from the Qwen-backed, local-model/MCP `readsubagent` in
-related implementations. Native `zz-readagent` uses only Copilot's `read` and
-`search` tools and requires no Qwen, MCP, local service, network service, or
-extra runtime. Its profile deliberately has no `model` field. It therefore
-does not pin a model; absence of that field alone does not establish identical
-inheritance behavior in every Copilot client or cloud runtime.
+Native `zz-readagent` uses only Copilot's `read` and `search` tools and requires
+no local service, network service, or extra runtime. Its profile deliberately
+has no `model` field. It therefore does not pin a model; absence of that field
+alone does not establish identical inheritance behavior in every Copilot
+client or cloud runtime.
 
 **Stable scout handoff.** A dispatch has a required `Question:` and may include
 `Paths:`, `Symbols:`, `Search terms:`, `Line ranges:`, and `Output:`. The report

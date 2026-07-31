@@ -32,14 +32,13 @@ and read planner that can reduce reads in the parent's context. It does not
 replace direct self-grounding by the other specialized roles or each vetter's
 own evidence inspection.
 
-Unlike the Qwen-backed, local-model/MCP `readsubagent` used by related
-implementations, this native role uses only Copilot's `read` and `search`
-tools. It needs no Qwen, MCP, local or network service, or extra runtime. Its
-profile intentionally omits `model`, and none of the profiles pins a model. In
-Copilot CLI, users can select the active model with `/model` and configure
-default or per-agent subagent models with `/subagents`. Model controls and
-selection semantics can differ in other Copilot clients and cloud runtimes, so
-the absent field alone is not a claim of identical inheritance everywhere.
+This native role uses only Copilot's `read` and `search` tools and needs no
+local or network service or extra runtime. Its profile intentionally omits
+`model`, and none of the profiles pins a model. In Copilot CLI, users can
+select the active model with `/model` and configure default or per-agent
+subagent models with `/subagents`. Model controls and selection semantics can
+differ in other Copilot clients and cloud runtimes, so the absent field alone
+is not a claim of identical inheritance everywhere.
 
 Dispatch it with a required `Question:` and, when useful, optional `Paths:`,
 `Symbols:`, `Search terms:`, `Line ranges:`, and `Output:` fields. It reports a
@@ -63,18 +62,42 @@ Copilot CLI chooses `bash` or `powershell` for the current operating system.
 
 ## Install in a repository
 
-Copy the complete Copilot package into the target repository:
+Use this only for a new installation where none of the destination package
+paths already exist. If any are present, stop and inspect them; merge the
+package changes into customized profiles, instructions, hooks, or `AGENTS.md`
+instead of overwriting them.
 
 ```sh
-cp -R /path/to/zzCopilotAgents/.github/agents <target-repo>/.github/
-cp -R /path/to/zzCopilotAgents/.github/hooks <target-repo>/.github/
-cp /path/to/zzCopilotAgents/.github/copilot-instructions.md \
-  <target-repo>/.github/copilot-instructions.md
-cp /path/to/zzCopilotAgents/AGENTS.md <target-repo>/AGENTS.md
+source=/path/to/zzCopilotAgents
+target=/path/to/target-repo
+
+install_zz_copilot_agents() {
+  for path in .github/agents .github/hooks \
+    .github/copilot-instructions.md AGENTS.md
+  do
+    if [ -e "$target/$path" ] || [ -L "$target/$path" ]; then
+      printf 'Refusing to overwrite %s; inspect and merge it instead.\n' \
+        "$target/$path" >&2
+      return 1
+    fi
+  done
+
+  mkdir -p "$target/.github/agents" "$target/.github/hooks/scripts" &&
+  cp "$source"/.github/agents/zz-*.agent.md "$target/.github/agents/" &&
+  cp "$source/.github/hooks/zz-implementer.json" "$target/.github/hooks/" &&
+  cp "$source/.github/hooks/scripts/verify-implementer.py" \
+    "$target/.github/hooks/scripts/" &&
+  cp "$source/.github/copilot-instructions.md" \
+    "$target/.github/copilot-instructions.md" &&
+  cp "$source/AGENTS.md" "$target/AGENTS.md"
+}
+
+install_zz_copilot_agents
 ```
 
-If the target already has Copilot instructions or hooks, merge the files rather
-than overwriting them. Keep the `<!-- zz-copilot-agents:start -->` and
+The explicit file list copies the tracked package content without recursively
+copying generated files from a used checkout, such as Python bytecode under a
+hook `__pycache__`. Keep the `<!-- zz-copilot-agents:start -->` and
 `<!-- zz-copilot-agents:end -->` markers around the parent contract so an
 installer can update that block safely.
 
@@ -85,11 +108,30 @@ and hook configuration are loaded when a session starts.
 
 ## Install agents for one user
 
-Agent profiles can be made available across repositories:
+Agent profiles can be made available across repositories. This command is only
+for profiles that are not already installed. If a same-named profile exists,
+it refuses to overwrite it; inspect and merge customized profiles instead.
 
 ```sh
-mkdir -p ~/.copilot/agents
-cp /path/to/zzCopilotAgents/.github/agents/zz-*.agent.md ~/.copilot/agents/
+source=/path/to/zzCopilotAgents
+destination="$HOME/.copilot/agents"
+
+install_zz_user_agents() {
+  for profile in "$source"/.github/agents/zz-*.agent.md
+  do
+    installed="$destination/${profile##*/}"
+    if [ -e "$installed" ] || [ -L "$installed" ]; then
+      printf 'Refusing to overwrite %s; inspect and merge it instead.\n' \
+        "$installed" >&2
+      return 1
+    fi
+  done
+
+  mkdir -p "$destination" &&
+  cp "$source"/.github/agents/zz-*.agent.md "$destination/"
+}
+
+install_zz_user_agents
 ```
 
 The parent contract and enforcement hooks are repository policy, so a complete
@@ -98,19 +140,25 @@ installation still needs `AGENTS.md`, `.github/copilot-instructions.md`, and
 
 ## Verify
 
-In a new Copilot CLI session:
+### Verify the source distribution
+
+From the `zzCopilotAgents` source checkout, run the automated verifier tests:
+
+```sh
+python3 -m unittest discover -s tests/agents -p 'test_*.py'
+python3 -m unittest discover -s tests/hooks -p 'test_*.py'
+```
+
+### Verify the installed package
+
+After installation, open the target repository and start a fresh Copilot CLI
+session there:
 
 1. Run `/agent` and confirm all six `zz-*` agents are listed.
 2. Run `/env` and confirm the repository instructions and hook file are loaded.
-3. Run the focused verifier tests:
-
-   ```sh
-   python3 -m unittest discover -s tests/agents -p 'test_*.py'
-   python3 -m unittest discover -s tests/hooks -p 'test_*.py'
-   ```
-4. Dispatch a factual question, a read-planning question, and a prohibited
+3. Dispatch a factual question, a read-planning question, and a prohibited
    review request; inspect the report/citations and refusal.
-5. Use `/model` to select another available model and repeat representative
+4. Use `/model` to select another available model and repeat representative
    dispatches when practical. Use `/subagents` to inspect or configure the
    default and per-agent subagent model choices.
 
