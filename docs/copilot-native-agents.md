@@ -157,3 +157,7 @@ It defines role selection, requires explicit solution choice before design,
 keeps implementation pieces bounded, preserves three-lens verification, and
 leaves decomposition, sequencing, integration, final verification, and all git
 operations with the parent.
+
+The repository-root `AGENTS.md` carries the same marked contract for tools that
+discover root agent guidance. The surrounding introductions may differ, but an
+automated test requires the `zz-copilot-agents` blocks to remain byte-identical.

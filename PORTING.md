@@ -8,7 +8,8 @@ GitHub Copilot-native distribution.
 - Agent discovery moved to `.github/agents/*.agent.md`.
 - Profiles now use Copilot's portable `read`, `search`, `execute`, and `edit`
   tool aliases and pin no model.
-- The parent contract moved to `.github/copilot-instructions.md`.
+- The parent contract moved to `.github/copilot-instructions.md` and a
+  synchronized repository-root `AGENTS.md`.
 - Delegation guidance now names registered custom agents and Copilot's parallel
   subagent capability rather than a harness-specific invocation API.
 - Repository hooks under `.github/hooks/` now enforce implementer handoffs on
