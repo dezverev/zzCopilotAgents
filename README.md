@@ -159,5 +159,5 @@ mechanical lifecycle protection for cooperative agents and ordinary or
 accidental contract violations; they do not certify implementation semantics or
 replace parent review of diffs, tests, reports, and ledgers.
 
-See [docs/copilot-native-agents.md](docs/copilot-native-agents.md) for the design
-and [PORTING.md](PORTING.md) for the migration record.
+See [docs/copilot-native-agents.md](docs/copilot-native-agents.md) for the
+design.
