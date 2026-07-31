@@ -5,7 +5,7 @@ the parent-side contract that ships with it — see
 [docs/copilot-native-agents.md](docs/copilot-native-agents.md) for the design
 rationale and [README.md](README.md) for installation.
 
-Keep the marked block synchronized with the repository-root `AGENTS.md`.
+Keep the marked block synchronized with `.github/copilot-instructions.md`.
 
 <!-- zz-copilot-agents:start -->
 ## Delegated Roles

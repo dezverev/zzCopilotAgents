@@ -21,6 +21,8 @@ The profiles are only part of the system:
 - `.github/copilot-instructions.md` tells the parent when and how to delegate,
   keeps integration and git operations with the parent, and requires three
   independent `zz-vetter` lenses for high-value review.
+- `AGENTS.md` exposes the same marked parent contract to tools that discover
+  repository-root agent guidance. A test keeps the two copies synchronized.
 - `.github/hooks/zz-implementer.json` enforces implementation-document
   immutability, append-only ledgers, and confidence consistency.
 
@@ -68,6 +70,7 @@ cp -R /path/to/zzCopilotAgents/.github/agents <target-repo>/.github/
 cp -R /path/to/zzCopilotAgents/.github/hooks <target-repo>/.github/
 cp /path/to/zzCopilotAgents/.github/copilot-instructions.md \
   <target-repo>/.github/copilot-instructions.md
+cp /path/to/zzCopilotAgents/AGENTS.md <target-repo>/AGENTS.md
 ```
 
 If the target already has Copilot instructions or hooks, merge the files rather
@@ -90,7 +93,7 @@ cp /path/to/zzCopilotAgents/.github/agents/zz-*.agent.md ~/.copilot/agents/
 ```
 
 The parent contract and enforcement hooks are repository policy, so a complete
-installation still needs `.github/copilot-instructions.md` and
+installation still needs `AGENTS.md`, `.github/copilot-instructions.md`, and
 `.github/hooks/` in each repository.
 
 ## Verify
