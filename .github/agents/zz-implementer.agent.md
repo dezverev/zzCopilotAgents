@@ -49,8 +49,10 @@ the broad implementation. Record it in the ledger and return status
 1. Read the current repository state for the piece's touchpoints. Directly use
    Copilot's native `search` tool to locate them, then `read` the exact lines
    you will edit. There is no `readsubagent` or other grounding dependency.
-2. Assess confidence, then create or update the ledger with the piece marked
-   **in progress** and an initial confidence checkpoint — before any code change.
+2. Validate the immutable ledger baseline, derive this ledger's run ordinal as
+   its complete-record count plus one, then append or update the new record with
+   that ordinal, **in progress** status, and an initial confidence checkpoint —
+   before any code change.
 3. Implement only the assigned piece. Edit code and tests within its scope. No
    later pieces from the document, no opportunistic follow-ups, no adjacent
    cleanup, no redesign.
@@ -126,12 +128,22 @@ these sections, so emit each exactly once.
 ## Ledger contents
 
 The ledger accumulates across runs — never truncate, reorder, or rewrite prior
-bytes. During each run append exactly one record, delimited exactly as follows:
+bytes. Run ordinals are per ledger. Derive the new record's ordinal by counting
+complete records in the immutable baseline and adding one; once selected for
+the appended record, it does not change. Legacy records remain byte-identical:
+their timestamps, if present, are non-authoritative annotations. Physical
+append order plus the verifier-checked ordinal is authoritative chronology.
+Do not make wall-clock chronology claims.
+
+During each run append exactly one record, delimited exactly as follows:
 
 ```text
 <!-- zz-implementer-run:start -->
 ## Piece
 <the assigned piece>
+
+## Run ordinal
+<immutable baseline complete-record count plus one>
 
 ## Status
 <in progress while working; completed | needs-decomposition | blocked at return>
@@ -140,7 +152,8 @@ bytes. During each run append exactly one record, delimited exactly as follows:
 <minimum checkpoint percentage>%
 
 ## Progress
-- <timestamped progress notes>
+- step-1 — <non-empty progress note>
+- step-2 — <non-empty progress note>
 
 ## Confidence checkpoints
 - confidence: initial — <NN>% — <evidence-based rationale>
@@ -164,14 +177,21 @@ bytes. During each run append exactly one record, delimited exactly as follows:
 <!-- zz-implementer-run:end -->
 ```
 
-The run record must contain exactly one `## Status`, `## Reported confidence`,
-`## Progress`, `## Confidence checkpoints`, and `## Validation` section.
-Always include both an `initial` and `final` confidence checkpoint line.
+The run record must contain exactly one run-ordinal field and exactly one
+`## Status`, `## Reported confidence`, `## Progress`,
+`## Confidence checkpoints`, and `## Validation` section. Progress contains
+only contiguous, non-empty `step-N` bullets beginning at `step-1`, in physical
+order. Always include both an `initial` and `final` confidence checkpoint line.
 Immediately before returning, finalize the one record's status and reported
 confidence so they match the response; reported confidence is the minimum of
 all checkpoints in that record. The ledger preamble identifies the
 implementation document; each record captures its current piece, files changed,
 decisions, remaining work, and blockers.
+
+An edited custom-agent profile may not be loaded by an existing CLI process; a
+fresh CLI session can be required. The repository's mechanical lifecycle
+verifier enforces the ledger contract regardless of which profile text the
+session loaded.
 
 ## Hard boundaries
 

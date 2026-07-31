@@ -45,9 +45,12 @@ prohibited even though Copilot supports parallel subagents.
 
 **Markdown handoffs with a machine-checked ledger.** Human-readable reports use
 stable Markdown sections. Each implementation run appends one delimited record
-to a cumulative ledger. Repository hooks parse only the small stable contract:
-status, reported confidence, confidence checkpoints, validation, and the ledger
-path.
+to a cumulative ledger. Physical append order plus a verifier-checked run
+ordinal is the authoritative chronology. Ordinals are local to each ledger:
+the expected ordinal is the immutable baseline's complete-record count plus
+one. New progress sections contain only contiguous, non-empty `step-1` through
+`step-N` notes. Repository hooks parse this mechanical lifecycle contract; they
+do not establish that the implementation is semantically correct.
 
 ## Native tool boundaries
 
@@ -79,7 +82,9 @@ no hook enforcement of `zz-readagent` behavior or report formatting.
 For `zz-implementer`, `subagentStart` snapshots all direct Markdown
 implementation documents and existing ledgers. State is keyed by canonical
 repository root and session ID in the platform temporary directory. A
-repository-level active marker preserves the single-implementer invariant.
+repository-level active marker preserves the single-active-implementer
+invariant across the repository. That global concurrency check is distinct
+from chronology ordinals, which are counted independently in each ledger.
 
 ### Tool use
 
@@ -87,8 +92,8 @@ While matching implementer state is active, `preToolUse` denies direct edit,
 create, write, or patch operations that expose a path to an implementation
 document. Ledger paths and unrelated source paths remain available.
 
-This is defense in depth, not the final integrity boundary. Execute tools can
-write indirectly and tool argument shapes can vary.
+This is defense in depth. Execute tools can write indirectly and tool argument
+shapes can vary.
 
 ### Stop
 
@@ -100,14 +105,37 @@ write indirectly and tool argument shapes can vary.
 4. An existing ledger is an exact byte prefix of the current ledger, or the
    ledger is new.
 5. The appended suffix contains exactly one complete run record.
-6. Response and ledger status and confidence agree.
-7. Initial and final confidence checkpoints exist and the reported value equals
-   the run's minimum checkpoint.
-8. Confidence below 80% uses `blocked` with a non-empty reason and requested
+6. Exact baseline run markers are ordered correctly, and the new record has
+   exactly one positive decimal ordinal equal to the baseline complete-record
+   count plus one.
+7. New progress is a contiguous sequence of non-empty `step-N` notes beginning
+   at `step-1`.
+8. Response and ledger status and confidence agree.
+9. Every confidence-checkpoint line parses; labels are ordered `initial`,
+   optional contiguous `milestone-1` through `milestone-N`, then `final`; and
+   the reported value equals the minimum of all checkpoints.
+10. Confidence below 80% uses `blocked` with a non-empty reason and requested
    clarifications.
+
+A baseline with orphaned, reversed, nested, or unterminated exact run markers
+fails closed. Missing, duplicate, malformed, or incorrect new ordinals and
+empty, malformed, duplicated, gapped, or reordered progress steps likewise
+fail closed at stop. Existing legacy record bytes are not normalized or
+rewritten: any timestamps in them remain non-authoritative annotations. The
+verifier performs no wall-clock validation and makes no claim about historical
+chronology beyond physical append order and checked ordinals.
 
 A rejected stop retains its original baseline so a forced continuation is
 checked against the same evidence. Accepted stops remove temporary state.
+
+Temporary verifier state uses 0700 directories and 0600 files. These private
+modes protect it from other OS users and accidental exposure, not arbitrary
+commands running as the same execution principal. An execute-capable hostile
+or noncooperative implementer sharing that OS user can discover, alter, or
+remove the state. The hooks therefore are not a hostile-worker security
+boundary without a separately privileged principal or service. They remain
+fail-closed mechanical lifecycle protection for cooperative agents and
+ordinary or accidental contract violations.
 
 ## Runtime and portability
 
@@ -118,6 +146,9 @@ the same Python verifier.
 
 Hook failures are fail-closed for the implementer. Python 3 is therefore an
 explicit installation prerequisite rather than an optional enhancement.
+After editing an agent profile, restart Copilot CLI and use a fresh session
+before claiming the new profile text is loaded; an already-running process may
+retain the previous profile.
 
 ## Parent contract
 

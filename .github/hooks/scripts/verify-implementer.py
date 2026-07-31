@@ -23,9 +23,10 @@ START_MARKER = "<!-- zz-implementer-run:start -->"
 END_MARKER = "<!-- zz-implementer-run:end -->"
 ALLOWED_STATUSES = {"completed", "needs-decomposition", "blocked"}
 CHECKPOINT_RE = re.compile(
-    r"(?m)^-\s*confidence:\s*(initial|milestone-\d+|final)\s+[—-]\s+"
-    r"(\d{1,3})%\s+[—-]\s+(\S.*)$"
+    r"-\s*confidence:\s*(initial|milestone-\d+|final)\s+[—-]\s+"
+    r"(\d{1,3})%\s+[—-]\s+(\S.*)"
 )
+PROGRESS_RE = re.compile(r"- step-([1-9]\d*) — (\S.*)")
 
 
 class VerificationError(Exception):
@@ -245,8 +246,84 @@ def extract_record(appended: bytes, is_new: bool) -> str:
     return record
 
 
-def record_confidence(record: str, status: str, confidence: int) -> None:
+def baseline_record_count(baseline: bytes) -> int:
+    try:
+        text = baseline.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise VerificationError("ledger baseline is not UTF-8") from error
+    count = 0
+    in_record = False
+    for line in text.splitlines():
+        if line == START_MARKER:
+            if in_record:
+                raise VerificationError("ledger baseline contains a nested run start marker")
+            in_record = True
+        elif line == END_MARKER:
+            if not in_record:
+                raise VerificationError("ledger baseline contains an orphaned run end marker")
+            in_record = False
+            count += 1
+    if in_record:
+        raise VerificationError("ledger baseline contains an unterminated run start marker")
+    return count
+
+
+def validate_record_chronology(record: str, expected_ordinal: int) -> None:
     sections = markdown_sections(record)
+    ordinal = unique_section(sections, "Run ordinal")
+    if not re.fullmatch(r"[1-9]\d*", ordinal):
+        raise VerificationError("run ordinal must be a positive decimal integer")
+    if int(ordinal) != expected_ordinal:
+        raise VerificationError(
+            f"run ordinal must equal baseline record count plus one ({expected_ordinal})"
+        )
+
+    progress = unique_section(sections, "Progress")
+    steps: list[int] = []
+    for line in progress.splitlines():
+        match = PROGRESS_RE.fullmatch(line)
+        if not match:
+            raise VerificationError(
+                "progress must contain only non-empty ordered '- step-N — ...' bullets"
+            )
+        steps.append(int(match.group(1)))
+    if steps != list(range(1, len(steps) + 1)):
+        raise VerificationError("progress steps must start at step-1 and be contiguous in order")
+
+
+def parse_checkpoints(section: str) -> list[int]:
+    checkpoints: list[tuple[str, int]] = []
+    for line in section.splitlines():
+        match = CHECKPOINT_RE.fullmatch(line)
+        if not match:
+            raise VerificationError(
+                "confidence checkpoints must contain only complete checkpoint lines"
+            )
+        value = int(match.group(2))
+        if value > 100:
+            raise VerificationError("checkpoint confidence must be between 0% and 100%")
+        checkpoints.append((match.group(1), value))
+
+    labels = [label for label, _ in checkpoints]
+    if len(labels) < 2 or labels[0] != "initial" or labels[-1] != "final":
+        raise VerificationError(
+            "confidence checkpoints require initial first and final last"
+        )
+    expected = ["initial"]
+    expected.extend(f"milestone-{number}" for number in range(1, len(labels) - 1))
+    expected.append("final")
+    if labels != expected:
+        raise VerificationError(
+            "confidence checkpoint milestones must be unique, contiguous, and ordered"
+        )
+    return [value for _, value in checkpoints]
+
+
+def record_confidence(
+    record: str, status: str, confidence: int, expected_ordinal: int
+) -> None:
+    sections = markdown_sections(record)
+    validate_record_chronology(record, expected_ordinal)
     ledger_status = unique_section(sections, "Status")
     confidence_names = [
         name for name in ("Reported confidence", "Confidence") if sections.get(name)
@@ -258,16 +335,9 @@ def record_confidence(record: str, status: str, confidence: int) -> None:
     )
     if ledger_status != status or ledger_confidence != confidence:
         raise VerificationError("response status or confidence disagrees with ledger")
-    unique_section(sections, "Progress")
     unique_section(sections, "Validation")
     checkpoint_section = unique_section(sections, "Confidence checkpoints")
-    checkpoints = CHECKPOINT_RE.findall(checkpoint_section)
-    labels = [item[0] for item in checkpoints]
-    if labels.count("initial") != 1 or labels.count("final") != 1:
-        raise VerificationError("run record requires one initial and one final confidence checkpoint")
-    values = [int(item[1]) for item in checkpoints]
-    if any(value > 100 for value in values):
-        raise VerificationError("checkpoint confidence must be between 0% and 100%")
+    values = parse_checkpoints(checkpoint_section)
     if min(values) != confidence:
         raise VerificationError("reported confidence must equal the minimum run checkpoint")
 
@@ -279,8 +349,9 @@ def verify_ledgers(
     current_bytes = ledger.read_bytes()
     if not current_bytes.startswith(baseline_bytes):
         raise VerificationError("reported ledger is not append-only")
+    expected_ordinal = baseline_record_count(baseline_bytes) + 1
     record = extract_record(current_bytes[len(baseline_bytes) :], ledger_name not in baseline)
-    record_confidence(record, status, confidence)
+    record_confidence(record, status, confidence, expected_ordinal)
 
     _, current = snapshot(root)
     allowed_names = set(baseline) | {ledger_name}
