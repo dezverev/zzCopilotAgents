@@ -38,8 +38,32 @@ verification as advisory parent checks. Copilot's `subagentStart`,
 
 - implementation documents are snapshotted and checked byte-for-byte;
 - ledgers must be new or append-only;
-- status and confidence must agree across the response and ledger; and
+- physical append order plus a verifier-checked per-ledger run ordinal is the
+  authoritative chronology: the expected ordinal is the immutable baseline
+  complete-record count plus one;
+- every new progress section is contiguous, non-empty `step-N` notes beginning
+  at `step-1`;
+- status and confidence must agree across the response and ledger;
+- every checkpoint line is parsed in `initial`, optional contiguous milestones,
+  `final` order and included in the reported minimum; and
 - low-confidence or malformed completion claims are blocked.
+
+The repository-global active marker enforces one active implementer, while run
+ordinals are counted separately for each ledger. At stop, orphaned, reversed,
+nested, or unterminated exact baseline markers fail closed, as do invalid new
+ordinals or progress. Legacy records remain byte-identical; their timestamps,
+if present, are non-authoritative annotations. No wall-clock validation is
+performed, and these hooks verify mechanical lifecycle evidence rather than
+semantic implementation correctness or historical chronology.
+
+Verifier state uses private 0700 directories and 0600 files. Those modes
+protect against other OS users and accidental exposure, but not arbitrary
+commands running as the same OS user. An execute-capable hostile or
+noncooperative implementer sharing the execution principal can discover,
+alter, or remove temporary verifier state. Without a separately privileged
+principal or service, hooks are not a hostile-worker security boundary; they
+remain fail-closed mechanical lifecycle protection for cooperative agents and
+ordinary or accidental contract violations.
 
 The verifier requires Python 3.10 or newer but no packages, MCP server, local model, or
 network access.
@@ -65,4 +89,8 @@ network access.
   the implementer lifecycle, not this scout contract, so behavior is not
   claimed to be deterministic across models.
 - Pre-tool path blocking is defense in depth. Stop-time snapshot verification
-  remains authoritative because execute tools may write files indirectly.
+  catches ordinary or accidental indirect writes but cannot isolate its state
+  from hostile same-principal execute tools.
+- Agent profile edits may not be loaded by an already-running Copilot CLI
+  process. Restart the CLI and use a fresh session before claiming an edited
+  profile is active.

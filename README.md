@@ -75,8 +75,10 @@ than overwriting them. Keep the `<!-- zz-copilot-agents:start -->` and
 `<!-- zz-copilot-agents:end -->` markers around the parent contract so an
 installer can update that block safely.
 
-Restart Copilot CLI after installation. Custom agents, instructions, and hook
-configuration are loaded when a session starts.
+Restart Copilot CLI after installation or after editing a profile, then use a
+fresh session before claiming the edited profile is loaded. An existing CLI
+process may retain the prior custom-agent profile; custom agents, instructions,
+and hook configuration are loaded when a session starts.
 
 ## Install agents for one user
 
@@ -117,19 +119,42 @@ an append-only ledger under `docs/artifacts/implementationdocs/ledgers/`.
 
 At implementer start, the hook snapshots implementation documents and ledgers
 outside the repository. Direct edits to implementation documents are denied
-where the edit tool exposes a path. At implementer stop, the authoritative
-snapshot check blocks the handoff unless:
+where the edit tool exposes a path. At implementer stop, the snapshot check
+fails closed and blocks the handoff unless:
 
 - implementation documents are byte-for-byte unchanged;
 - the reported ledger is new or append-only;
 - a cumulative ledger may contain multiple prior records, but the current
   run's appended suffix contains exactly one complete delimited record;
+- exact baseline markers are properly ordered, and the new record's one
+  positive decimal run ordinal equals the immutable baseline complete-record
+  count plus one;
+- progress consists only of contiguous, non-empty `step-N` notes beginning at
+  `step-1`;
 - response status and confidence match the ledger; and
-- reported confidence is the minimum checkpoint for that run.
+- every confidence-checkpoint line parses, labels are ordered as `initial`,
+  optional contiguous milestones, then `final`, and reported confidence is the
+  minimum of all those checkpoints.
+
+Physical append order plus that verifier-checked ordinal is authoritative
+chronology. Ordinals are per ledger; they are separate from the
+repository-global active marker that permits only one implementer at a time.
+Orphaned, reversed, nested, or unterminated exact baseline markers fail closed,
+as do invalid new ordinals or progress, when the implementer stops. Legacy
+record bytes remain untouched, including any timestamps; those timestamps are
+non-authoritative, and no wall clock is validated.
 
 Confidence below 80% is accepted only as `blocked` with a reason and concrete
 clarifications. Pre-tool denial is defense in depth because shell commands can
-write indirectly; stop-time snapshot verification is the final guarantee.
+write indirectly. Private verifier state uses 0700 directories and 0600 files,
+which protect it from other OS users and accidental exposure, not arbitrary
+commands run by the same execution principal. An execute-capable hostile or
+noncooperative implementer sharing that OS user can discover, alter, or remove
+temporary state. Without a separately privileged principal or service, these
+hooks are not a hostile-worker security boundary. They are fail-closed
+mechanical lifecycle protection for cooperative agents and ordinary or
+accidental contract violations; they do not certify implementation semantics or
+replace parent review of diffs, tests, reports, and ledgers.
 
 See [docs/copilot-native-agents.md](docs/copilot-native-agents.md) for the design
 and [PORTING.md](PORTING.md) for the migration record.

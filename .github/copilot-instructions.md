@@ -100,7 +100,16 @@ to apply the recommended fix.
 Never delegate an entire feature, multiple design stages, a cross-cutting
 catch-all, or "finish the rest" in one call. If a piece cannot be reviewed and
 course-corrected on its own, split it again first. Run **one** implementer at a
-time — never two against the same document or ledger.
+time repository-wide — never two against the same or different documents or
+ledgers.
+
+Each ledger's chronology is its physical append order plus the mechanically
+verified per-ledger run ordinal. For every new record, the implementer validates
+the immutable baseline, counts its complete records, and uses count plus one as
+the record's ordinal. Its progress notes must be contiguous, ordered, non-empty
+`step-N` bullets beginning at `step-1`. Existing legacy records remain
+byte-identical; timestamps in them, if present, are non-authoritative
+annotations. Do not infer or claim chronology from wall clocks.
 
 Treat every return as a checkpoint you must actually perform: read the report,
 the ledger, and the diff; run the focused tests yourself; review or vet as
@@ -111,8 +120,22 @@ only when all of these hold:
 - `## Confidence` is ≥ 80%
 - the ledger under `docs/artifacts/implementationdocs/ledgers/` was updated, and
   its minimum confidence checkpoint matches the reported figure
+- the appended record has exactly one correct ordinal (immutable-baseline
+  complete-record count plus one) for that ledger, and its progress is ordered,
+  contiguous, non-empty `step-1` through `step-N`
 - the implementation document is unchanged
 - the claimed validation actually ran and passed
+
+The lifecycle hooks are fail-closed mechanical protection for cooperative
+agents and ordinary or accidental contract violations. Their private state
+uses 0700 directories and 0600 files to prevent access by other OS users and
+accidental exposure; those modes do not protect against arbitrary commands
+running as the same OS user. An execute-capable hostile or noncooperative
+implementer sharing that principal can discover, alter, or remove temporary
+verifier state. The hooks are therefore not a hostile-worker security boundary
+without a separately privileged principal or service. Continue to review the
+report, diff, tests, and ledger rather than treating hook acceptance as proof
+of implementation correctness.
 
 If `## Status` is `needs-decomposition`, split the piece further — never
 redispatch the unchanged assignment. If `blocked` or confidence < 80%, do not
@@ -120,6 +143,10 @@ accept the piece: resolve the stated clarifications, make the approved direction
 more explicit, then redispatch a fresh implementer for the *same* bounded piece.
 A missing or malformed status/confidence section is a failed handoff — treat it
 as blocked.
+
+An edited custom-agent profile may require a fresh CLI session before the CLI
+loads it. Mechanical lifecycle verifier enforcement applies regardless of the
+profile version loaded by that session.
 
 **`zz-vetter`** — read-only adversarial review. Delegate to **three independent
 instances in parallel**, one per lens, naming the lens in each prompt:
