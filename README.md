@@ -15,7 +15,7 @@ local model service. The hooks require Python 3.10 or newer.
 | `zz-implementer` | One bounded implementation piece | **yes** |
 | `zz-vetter` | Independent adversarial review | no |
 
-The brainstormer/designplanner prompts still need tuning. Sometimes they trigger a bit much and overscope.
+The brainstormer/designplanner prompts still need tuning. Sometimes they trigger a bit much and overscope. In my Pi setup I have their inclusion on a toggle. 
 
 Repository policy lives in `AGENTS.md` and
 `.github/copilot-instructions.md`. The files contain the same marked delegation
