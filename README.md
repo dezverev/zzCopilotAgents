@@ -30,6 +30,11 @@ use `/model` and `/subagents` in Copilot CLI to configure model selection.
   hooks enabled
 - Python 3.10 or newer (`python3` on Linux/macOS or `python` on Windows)
 
+## Install
+
+Copy the contents of this repository's `.github/` directory into your
+repository's `.github/` directory, then restart Copilot.
+
 ## Test
 
 Test the source package:
