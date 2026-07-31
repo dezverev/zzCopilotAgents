@@ -78,21 +78,25 @@ no hook enforcement of `zz-readagent` behavior or report formatting.
 
 ### Start
 
-For `zz-implementer`, `subagentStart` snapshots all direct Markdown
-implementation documents and existing ledgers. State is keyed by canonical
-repository root and session ID in the platform temporary directory. A
-repository-level active marker preserves the single-active-implementer
-invariant across the repository. That global concurrency check is distinct
-from chronology ordinals, which are counted independently in each ledger.
+For `zz-implementer`, `subagentStart` recursively snapshots all Markdown
+implementation documents beneath the implementation-documents root, excluding
+the full ledger subtree. Existing regular ledger files are recursively
+snapshotted separately. State is keyed by canonical repository root and session
+ID in the platform temporary directory. A repository-level active marker
+preserves the single-active-implementer invariant across the repository. That
+global concurrency check is distinct from chronology ordinals, which are
+counted independently in each ledger.
 
 ### Tool use
 
-While matching implementer state is active, `preToolUse` denies direct edit,
-create, write, or patch operations that expose a path to an implementation
-document. Ledger paths and unrelated source paths remain available.
+While matching implementer state is active, `preToolUse` provides path-aware
+defense in depth for recognized tools whose names contain
+`edit`, `create`, `write`, or `patch`: it denies exposed string arguments under
+keys identifying a path or file when they target protected implementation
+documents, including nested documents. Ledger paths and unrelated source paths
+remain available.
 
-This is defense in depth. Execute tools can write indirectly and tool argument
-shapes can vary.
+Execute tools can still write indirectly, and tool argument shapes can vary.
 
 ### Stop
 

@@ -27,10 +27,95 @@ CHECKPOINT_RE = re.compile(
     r"(\d{1,3})%\s+[—-]\s+(\S.*)"
 )
 PROGRESS_RE = re.compile(r"- step-([1-9]\d*) — (\S.*)")
+ZONE_DOCUMENT = "document"
+ZONE_LEDGER = "ledger"
+ZONE_UNMANAGED = "unmanaged"
 
 
 class VerificationError(Exception):
     pass
+
+
+def _relative_to(path: Path, parent: Path, *, strict: bool = False) -> bool:
+    try:
+        relative = path.relative_to(parent)
+    except ValueError:
+        return False
+    return not strict or relative != Path()
+
+
+def _managed_area(path: Path, docs_root: Path, ledger_root: Path) -> str:
+    if _relative_to(path, ledger_root):
+        return ZONE_LEDGER
+    if _relative_to(path, docs_root):
+        return ZONE_DOCUMENT
+    return ZONE_UNMANAGED
+
+
+def _raw_symlink_components(path: Path) -> list[Path]:
+    current = Path(path.anchor)
+    symlinks: list[Path] = []
+    for part in path.parts[1:]:
+        if part == ".":
+            continue
+        if part == "..":
+            current = current.parent
+            continue
+        current /= part
+        if current.is_symlink():
+            symlinks.append(current)
+    return symlinks
+
+
+def _validate_managed_root_chains(repository: Path) -> None:
+    for managed_root in (repository / DOC_ROOT, repository / LEDGER_ROOT):
+        current = repository
+        for part in managed_root.relative_to(repository).parts:
+            current /= part
+            if current.is_symlink():
+                raise VerificationError("unsafe managed path contains a symlink")
+            if current.exists() and not current.is_dir():
+                raise VerificationError("managed root component is not a directory")
+
+
+def classify_managed_path(root: Path, candidate: Path | str) -> str:
+    """Classify a path without allowing aliases to cross managed-zone boundaries."""
+    repository = Path(os.path.abspath(str(Path(root).expanduser())))
+    resolved_repository = repository.resolve(strict=False)
+    docs_root = repository / DOC_ROOT
+    ledger_root = repository / LEDGER_ROOT
+    supplied = Path(candidate).expanduser()
+    raw = supplied if supplied.is_absolute() else repository / supplied
+    lexical = Path(os.path.normpath(str(raw)))
+
+    _validate_managed_root_chains(repository)
+
+    resolved_docs = docs_root.resolve(strict=False)
+    resolved_ledgers = ledger_root.resolve(strict=False)
+    if (
+        not _relative_to(resolved_docs, resolved_repository, strict=True)
+        or not _relative_to(resolved_ledgers, resolved_repository, strict=True)
+    ):
+        raise VerificationError("managed roots resolve outside the repository")
+
+    for symlink in _raw_symlink_components(raw):
+        if _relative_to(symlink, docs_root):
+            raise VerificationError("unsafe managed path contains a symlink")
+
+    resolved = raw.resolve(strict=False)
+    lexical_area = _managed_area(lexical, docs_root, ledger_root)
+    resolved_area = _managed_area(resolved, resolved_docs, resolved_ledgers)
+    if lexical_area != resolved_area:
+        raise VerificationError("path alias crosses a managed-zone boundary")
+
+    if _relative_to(lexical, ledger_root, strict=True):
+        return ZONE_LEDGER
+    if (
+        _relative_to(lexical, docs_root, strict=True)
+        and lexical.suffix.lower() == ".md"
+    ):
+        return ZONE_DOCUMENT
+    return ZONE_UNMANAGED
 
 
 def decision(allowed: bool, reason: str | None = None) -> dict[str, str]:
@@ -81,15 +166,34 @@ def encoded_files(paths: list[Path], root: Path) -> dict[str, str]:
     }
 
 
-def snapshot(root: Path) -> tuple[dict[str, str], dict[str, str]]:
+def managed_regular_files(root: Path) -> tuple[list[Path], list[Path]]:
     docs_dir = root / DOC_ROOT
-    ledgers_dir = root / LEDGER_ROOT
-    docs = sorted(path for path in docs_dir.glob("*.md") if path.is_file())
-    ledgers = (
-        sorted(path for path in ledgers_dir.rglob("*") if path.is_file())
-        if ledgers_dir.is_dir()
-        else []
-    )
+    _validate_managed_root_chains(root)
+    if not docs_dir.exists():
+        return [], []
+
+    documents: list[Path] = []
+    ledgers: list[Path] = []
+    pending = [docs_dir]
+    while pending:
+        directory = pending.pop()
+        for entry in sorted(os.scandir(directory), key=lambda item: item.name, reverse=True):
+            path = Path(entry.path)
+            if entry.is_symlink():
+                raise VerificationError("unsafe managed path contains a symlink")
+            if entry.is_dir(follow_symlinks=False):
+                pending.append(path)
+            elif entry.is_file(follow_symlinks=False):
+                zone = classify_managed_path(root, path)
+                if zone == ZONE_DOCUMENT:
+                    documents.append(path)
+                elif zone == ZONE_LEDGER:
+                    ledgers.append(path)
+    return sorted(documents), sorted(ledgers)
+
+
+def snapshot(root: Path) -> tuple[dict[str, str], dict[str, str]]:
+    docs, ledgers = managed_regular_files(root)
     return encoded_files(docs, root), encoded_files(ledgers, root)
 
 
@@ -145,11 +249,15 @@ def start(payload: dict[str, Any]) -> dict[str, str]:
         write_private_state(run_file, json.dumps(state, separators=(",", ":")))
         os.write(descriptor, run_file.name.encode("utf-8"))
     except Exception:
+        failed_descriptor = descriptor
+        descriptor = -1
+        os.close(failed_descriptor)
         run_file.unlink(missing_ok=True)
         marker.unlink(missing_ok=True)
         raise
     finally:
-        os.close(descriptor)
+        if descriptor != -1:
+            os.close(descriptor)
     return decision(True)
 
 
@@ -207,13 +315,10 @@ def resolve_ledger(root: Path, reported: str) -> tuple[Path, str]:
         raise VerificationError("ledger path must be repository-relative")
     if not relative.name.endswith(".ledger.md"):
         raise VerificationError("ledger path must end with .ledger.md")
-    expected_root = (root / LEDGER_ROOT).resolve()
-    candidate = (root / relative).resolve()
-    try:
-        candidate.relative_to(expected_root)
-    except ValueError as error:
-        raise VerificationError("ledger path is not beneath the ledger directory") from error
-    if candidate == expected_root or not candidate.is_file():
+    candidate = root / relative
+    if classify_managed_path(root, candidate) != ZONE_LEDGER:
+        raise VerificationError("ledger path is not beneath the ledger directory")
+    if not candidate.is_file():
         raise VerificationError("reported ledger does not exist")
     return candidate, candidate.relative_to(root).as_posix()
 
@@ -444,6 +549,7 @@ def pre_tool(payload: dict[str, Any]) -> dict[str, str]:
     if not isinstance(session_id, str) or not session_id:
         return tool_decision(True)
     root = repository_root(payload.get("cwd"))
+    cwd = Path(payload["cwd"]).expanduser().resolve()
     state = active_state(root)
     if state is None or state["sessionId"] != session_id:
         return tool_decision(True)
@@ -452,17 +558,11 @@ def pre_tool(payload: dict[str, Any]) -> dict[str, str]:
         raise VerificationError("preToolUse payload is missing toolName")
     if not any(word in tool.lower() for word in ("edit", "create", "write", "patch")):
         return tool_decision(True)
-    docs_root = (root / DOC_ROOT).resolve()
-    ledger_root = (root / LEDGER_ROOT).resolve()
     for raw in candidate_paths(payload.get("toolArgs", {})):
-        path = Path(raw).expanduser()
-        resolved = (path if path.is_absolute() else root / path).resolve()
-        try:
-            resolved.relative_to(ledger_root)
-            continue
-        except ValueError:
-            pass
-        if resolved.parent == docs_root and resolved.suffix.lower() == ".md":
+        candidate = Path(raw).expanduser()
+        if not candidate.is_absolute():
+            candidate = cwd / candidate
+        if classify_managed_path(root, candidate) == ZONE_DOCUMENT:
             raise VerificationError("implementation documents are read-only")
     return tool_decision(True)
 

@@ -2,8 +2,8 @@
 
 This repo distributes the `zz-*` Copilot custom agent set. The block below is
 the parent-side contract that ships with it — see
-[docs/copilot-native-agents.md](docs/copilot-native-agents.md) for the design
-rationale and [README.md](README.md) for installation.
+[docs/copilot-native-agents.md](../docs/copilot-native-agents.md) for the design
+rationale and [README.md](../README.md) for installation.
 
 Keep the marked block synchronized with the repository-root `AGENTS.md`.
 
