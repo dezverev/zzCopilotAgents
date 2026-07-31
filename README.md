@@ -35,6 +35,10 @@ use `/model` and `/subagents` in Copilot CLI to configure model selection.
 Copy the contents of this repository's `.github/` directory into your
 repository's `.github/` directory, then restart Copilot.
 
+Alternatively, give Copilot the
+[repository URL](https://github.com/dezverev/zzCopilotAgents) and ask it to
+install the agents.
+
 ## Test
 
 Test the source package:
