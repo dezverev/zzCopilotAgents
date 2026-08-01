@@ -12,11 +12,16 @@ selects the active model and `/subagents` configures default or per-agent
 subagent models. Other Copilot clients and cloud runtimes may expose different
 controls or semantics.
 
-**Self-contained grounding.** Each role searches and reads the live repository
-directly with Copilot's native tools. `zz-readagent` is an optional
-isolated-context factual scout and read planner: it can absorb broad discovery
-and reduce reads in the parent's context, but each other specialized role still
-grounds itself directly and every vetter inspects its own evidence.
+**Scout-first grounding.** Each role searches and reads the live repository
+directly with Copilot's native tools. `zz-readagent` is the default
+isolated-context factual scout whenever there is ambiguity about where to look
+or what to read. The delegation decision is based on knowledge, not task size
+or estimated tool-call count. It absorbs broad discovery and returns an ordered
+list of exact cited ranges for the parent to inspect. The parent skips it only
+when exact files and ranges are already known, the needed context is already in
+the thread, or the user explicitly requests a direct read. Each other
+specialized role still grounds itself directly and every vetter inspects its
+own evidence.
 
 Native `zz-readagent` uses only Copilot's `read` and `search` tools and requires
 no local service, network service, or extra runtime. Its profile deliberately
@@ -27,9 +32,21 @@ client or cloud runtime.
 **Stable scout handoff.** A dispatch has a required `Question:` and may include
 `Paths:`, `Symbols:`, `Search terms:`, `Line ranges:`, and `Output:`. The report
 starts with a direct `## Answer`, then supplies a compact subsystem map,
-focused read list, anchors, and `path:line` or `path:start-end` citations.
+focused read list, anchors, and `path:line` or `path:start-end` citations. The
+focused read list is ordered for parent consumption, uses exact ranges, and
+states what each range establishes. For initial archaeology it also distinguishes
+deciding definitions, wiring, tests or contracts, and avoid-for-now areas.
 Review, bug hunting, diagnosis, design selection, and edit-strategy requests
 are refused rather than converted into recommendations.
+
+**Architecture-level escalation.** `zz-brainstormer` and `zz-designplanner`
+operate at the altitude of a principal/architect producing the direction and
+SDD-style design for consequential system work. They are not routine
+implementation consultants. The parent owns localized design choices,
+implementation-step decisions, and small maintenance of approved design or
+implementation documents. Architecture agents are re-engaged after
+implementation begins only when new evidence invalidates the overall direction
+and an overall redesign is required.
 
 **One vetter profile, three independent runs.** The parent launches
 `zz-vetter` three times in parallel with the `research-grounding`,
@@ -157,9 +174,11 @@ retain the previous profile.
 
 `.github/copilot-instructions.md` is loaded as repository-wide Copilot guidance.
 It defines role selection, requires explicit solution choice before design,
-keeps implementation pieces bounded, preserves three-lens verification, and
-leaves decomposition, sequencing, integration, final verification, and all git
-operations with the parent.
+reserves brainstorming and design planning for architecture-level work, makes
+the scout the default for ambiguous initial exploration, keeps
+implementation pieces bounded, preserves three-lens verification, and leaves
+routine decisions, decomposition, sequencing, document maintenance between
+runs, integration, final verification, and all git operations with the parent.
 
 The repository-root `AGENTS.md` carries the same marked contract for tools that
 discover root agent guidance. The surrounding introductions may differ, but an
