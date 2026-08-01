@@ -43,6 +43,9 @@ class ReadagentProfileContractTest(unittest.TestCase):
 
     def test_dispatch_contract_has_one_required_question_and_optional_hints(self):
         self.assertIn("Only `Question:` is required", self.prompt)
+        self.assertIn("bounded exploration", self.prompt)
+        self.assertIn("knowledge ambiguity", self.prompt)
+        self.assertIn("exact files and ranges", self.prompt)
         for field in (
             "Question:",
             "Paths:",
@@ -68,6 +71,10 @@ class ReadagentProfileContractTest(unittest.TestCase):
         for heading in ("## Avoid for now", "## Uncertainty", "## Out of scope"):
             self.assertIn(heading, self.prompt)
         self.assertIn("refusal-only `## Out of scope`", self.prompt)
+        self.assertIn("primary handoff", self.prompt)
+        self.assertIn("order them in the sequence the parent should", self.prompt)
+        self.assertIn("state what each range establishes", self.prompt)
+        self.assertIn("## Avoid for now", self.prompt)
 
     def test_citation_and_evidence_rules_are_explicit(self):
         self.assertRegex(
@@ -76,6 +83,7 @@ class ReadagentProfileContractTest(unittest.TestCase):
         )
         self.assertIn("path:line", self.prompt)
         self.assertIn("path:start-end", self.prompt)
+        self.assertIn("do not stop at the first matching file", self.prompt)
         for forbidden_output in (
             "invented citations",
             "whole-file dumps",

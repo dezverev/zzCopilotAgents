@@ -8,9 +8,9 @@ local model service. The hooks require Python 3.10 or newer.
 
 | Agent | Purpose | Writes files |
 |---|---|---|
-| `zz-readagent` | Focused repository research | no |
-| `zz-brainstormer` | Solution options and tradeoffs | no |
-| `zz-designplanner` | Implementation-ready designs | no |
+| `zz-readagent` | Initial repository exploration and cited read plans | no |
+| `zz-brainstormer` | Principal-level architecture options | no |
+| `zz-designplanner` | SDD-style architecture designs | no |
 | `zz-debugger` | Evidence-based diagnosis | no |
 | `zz-implementer` | One bounded implementation piece | **yes** |
 | `zz-vetter` | Independent adversarial review | no |
@@ -54,9 +54,16 @@ python3 -m unittest discover -s tests/hooks -p 'test_*.py'
 
 - The parent owns decomposition, sequencing, integration, final verification,
   and all git operations.
-- Use `zz-brainstormer` before design when multiple approaches have meaningful
-  tradeoffs, then explicitly select one.
-- Use `zz-designplanner` for non-trivial selected approaches.
+- Use `zz-readagent` before exploratory parent reads whenever the exact files
+  and ranges are not already known; it returns an ordered subsystem map and
+  exact cited ranges for the parent to inspect.
+- Use `zz-brainstormer` only when materially different architecture approaches
+  require a principal-level decision, then explicitly select one.
+- Use `zz-designplanner` when the selected architecture warrants an SDD-style
+  implementation design.
+- Keep localized design choices, implementation-step decisions, and small
+  design-document updates with the parent. Re-engage architecture agents only
+  for an overall redesign.
 - Give `zz-implementer` one bounded piece from an implementation document under
   `docs/artifacts/implementationdocs/`.
 - Review important artifacts with three independent `zz-vetter` lenses:

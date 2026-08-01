@@ -15,21 +15,26 @@ The parent must also inspect the repository before delegating.
 
 | Situation | Agent |
 |---|---|
-| Answer a focused repository question or produce a read plan | `zz-readagent` |
-| Compare materially different approaches | `zz-brainstormer` |
-| Design one selected non-trivial approach | `zz-designplanner` |
+| Explore when exact repository locations are not yet known | `zz-readagent` |
+| Compare architecture-level approaches requiring a principal decision | `zz-brainstormer` |
+| Create an SDD-style design for one selected architecture | `zz-designplanner` |
 | Diagnose a failure with an uncertain cause | `zz-debugger` |
 | Build one bounded piece of an approved design | `zz-implementer` |
 | Challenge an important plan, diff, or completion claim | `zz-vetter` x3 |
 
-Use agents deliberately, not as a mandatory pipeline. A small, obvious change
-may need none of them.
+Use agents deliberately, not as a mandatory pipeline. The parent handles
+routine development decisions and small changes directly.
 
 ### Role rules
 
-**`zz-readagent`** is an optional read-only factual scout. Use it when isolated
-discovery saves parent context, not when a direct lookup is cheaper. Critical
-returned ranges still require parent inspection.
+**`zz-readagent`** is the default read-only scout before parent exploration
+whenever there is ambiguity about where to look or what to read. The trigger is
+knowledge ambiguity, not task size or estimated tool-call count. Use it to map
+the relevant subsystem and return the smallest ordered set of exact cited
+ranges the parent should inspect. Skip it only when the exact files and ranges
+are already known, the needed context is already in the thread, or the user
+explicitly asks for a direct read. Critical returned ranges still require
+parent inspection.
 
 Dispatch it with `Question:` and any useful optional fields:
 
@@ -57,12 +62,26 @@ correctness (`zz-vetter`), diagnose bugs (`zz-debugger`), compare solutions
 (`zz-brainstormer`), design changes (`zz-designplanner`), or implement them
 (`zz-implementer`).
 
-**`zz-brainstormer`** is read-only. Call it before design when multiple
-approaches have meaningful consequences. Give it the problem, constraints, and
-relevant paths. The parent or user selects an approach.
+For exploratory repository archaeology, delegate a bounded factual mapping
+question before broad parent `glob`, `rg`, or file reads. Ask for the subsystem
+map, deciding definitions and wiring, relevant tests or contracts, exact
+`path:start-end` ranges in reading order, search anchors, and avoid-for-now
+areas. If the report is vague, ask a narrower follow-up before broadening parent
+exploration.
+
+**`zz-brainstormer`** is read-only. Call it for a principal-level decision when
+multiple approaches would materially change architecture, system boundaries,
+data models, protocols, dependencies, migration strategy, or rollout. It
+creates high-level options; the parent or user selects one.
 
 **`zz-designplanner`** is read-only. Give it exactly one explicitly selected
-solution. It returns a staged, implementation-ready design, not code.
+architecture when an SDD-style, staged implementation design is warranted.
+
+Do not call either agent for localized choices, routine implementation-step
+decisions, or small updates to an approved design. The parent owns those
+decisions and may maintain design and implementation documents between
+implementation runs. Re-engage architecture agents during implementation only
+when new evidence invalidates the overall direction and requires redesign.
 
 **`zz-debugger`** is read-only. Use it before editing when a failure's cause is
 uncertain. Include the failure, reproduction command, output, and relevant
