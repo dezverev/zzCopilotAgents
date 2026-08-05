@@ -72,14 +72,12 @@ by asking. At that boundary, `zz-implementer` records confidence below 80%,
 stops, and returns blocked with the needed clarification rather than
 opportunistically implementing newly discovered out-of-scope work.
 
-**Markdown handoffs with a machine-checked ledger.** Human-readable reports use
-stable Markdown sections. Each implementation run appends one delimited record
-to a cumulative ledger. Physical append order plus a verifier-checked run
-ordinal is the authoritative chronology. Ordinals are local to each ledger:
-the expected ordinal is the immutable baseline's complete-record count plus
-one. New progress sections contain only contiguous, non-empty `step-1` through
-`step-N` notes. Repository hooks parse this mechanical lifecycle contract; they
-do not establish that the implementation is semantically correct.
+**Markdown handoffs with an append-only ledger.** Human-readable reports use
+stable Markdown sections. Each implementation run appends one delimited,
+non-empty record to a cumulative ledger. The hook checks only the hard storage
+invariants and the minimal status/ledger handoff. Run ordinals, progress,
+confidence, and validation evidence remain prompt-level conventions reviewed
+by the parent; hooks do not establish semantic correctness.
 
 ## Native tool boundaries
 
@@ -113,9 +111,7 @@ implementation documents beneath the implementation-documents root, excluding
 the full ledger subtree. Existing regular ledger files are recursively
 snapshotted separately. State is keyed by canonical repository root and session
 ID in the platform temporary directory. A repository-level active marker
-preserves the single-active-implementer invariant across the repository. That
-global concurrency check is distinct from chronology ordinals, which are
-counted independently in each ledger.
+preserves the single-active-implementer invariant across the repository.
 
 ### Tool use
 
@@ -137,26 +133,14 @@ Execute tools can still write indirectly, and tool argument shapes can vary.
 3. The reported ledger is strictly under the ledger directory.
 4. An existing ledger is an exact byte prefix of the current ledger, or the
    ledger is new.
-5. The appended suffix contains exactly one complete run record.
-6. Exact baseline run markers are ordered correctly, and the new record has
-   exactly one positive decimal ordinal equal to the baseline complete-record
-   count plus one.
-7. New progress is a contiguous sequence of non-empty `step-N` notes beginning
-   at `step-1`.
-8. Response and ledger status and confidence agree.
-9. Every confidence-checkpoint line parses; labels are ordered `initial`,
-   optional contiguous `milestone-1` through `milestone-N`, then `final`; and
-   the reported value equals the minimum of all checkpoints.
-10. Confidence below 80% uses `blocked` with a non-empty reason and requested
-   clarifications.
+5. The appended suffix contains exactly one non-empty delimited run record.
+6. The response contains one allowed `Status` and one repository-relative
+   `Ledger` path.
 
-A baseline with orphaned, reversed, nested, or unterminated exact run markers
-fails closed. Missing, duplicate, malformed, or incorrect new ordinals and
-empty, malformed, duplicated, gapped, or reordered progress steps likewise
-fail closed at stop. Existing legacy record bytes are not normalized or
-rewritten: any timestamps in them remain non-authoritative annotations. The
-verifier performs no wall-clock validation and makes no claim about historical
-chronology beyond physical append order and checked ordinals.
+Existing ledger bytes are not parsed, normalized, or rewritten. The verifier
+does not check run ordinals, progress formatting, response/ledger status
+agreement, confidence checkpoints, validation claims, or wall-clock chronology.
+Those remain agent-direction and parent-review responsibilities.
 
 A rejected stop retains its original baseline so a forced continuation is
 checked against the same evidence. Accepted stops remove temporary state.

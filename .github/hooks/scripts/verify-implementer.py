@@ -22,11 +22,6 @@ DOC_ROOT = Path("docs/artifacts/implementationdocs")
 START_MARKER = "<!-- zz-implementer-run:start -->"
 END_MARKER = "<!-- zz-implementer-run:end -->"
 ALLOWED_STATUSES = {"completed", "needs-decomposition", "blocked"}
-CHECKPOINT_RE = re.compile(
-    r"-\s*confidence:\s*(initial|milestone-\d+|final)\s+[—-]\s+"
-    r"(\d{1,3})%\s+[—-]\s+(\S.*)"
-)
-PROGRESS_RE = re.compile(r"- step-([1-9]\d*) — (\S.*)")
 ZONE_DOCUMENT = "document"
 ZONE_LEDGER = "ledger"
 ZONE_UNMANAGED = "unmanaged"
@@ -277,36 +272,20 @@ def unique_section(sections: dict[str, list[str]], name: str) -> str:
     return values[0]
 
 
-def parse_percentage(value: str, label: str) -> int:
-    match = re.fullmatch(r"(\d{1,3})%", value.strip())
-    if not match:
-        raise VerificationError(f"{label} must be an integer percentage")
-    number = int(match.group(1))
-    if not 0 <= number <= 100:
-        raise VerificationError(f"{label} must be between 0% and 100%")
-    return number
-
-
-def parse_response(response: Any) -> tuple[str, int, str]:
+def parse_response(response: Any) -> tuple[str, str]:
     if not isinstance(response, str):
         raise VerificationError("stop payload is missing response")
     sections = markdown_sections(response)
     status = unique_section(sections, "Status")
     if status not in ALLOWED_STATUSES:
         raise VerificationError("handoff status is not allowed")
-    confidence = parse_percentage(unique_section(sections, "Confidence"), "handoff confidence")
     ledger = unique_section(sections, "Ledger")
     if "\n" in ledger:
         raise VerificationError("ledger section must contain only one path")
     if "`" in ledger:
         raise VerificationError("ledger section path must not be wrapped in backticks")
     ledger = ledger.strip()
-    if confidence < 80:
-        if status != "blocked":
-            raise VerificationError("confidence below 80% requires blocked status")
-        unique_section(sections, "Low-confidence reason")
-        unique_section(sections, "Clarifications needed")
-    return status, confidence, ledger
+    return status, ledger
 
 
 def resolve_ledger(root: Path, reported: str) -> tuple[Path, str]:
@@ -348,115 +327,19 @@ def extract_record(appended: bytes, is_new: bool) -> str:
     record, after = remainder.split(END_MARKER, 1)
     if (not is_new and before.strip()) or after.strip():
         raise VerificationError("ledger suffix contains content outside the run record")
+    if not record.strip():
+        raise VerificationError("ledger run record must not be empty")
     return record
 
 
-def baseline_record_count(baseline: bytes) -> int:
-    try:
-        text = baseline.decode("utf-8")
-    except UnicodeDecodeError as error:
-        raise VerificationError("ledger baseline is not UTF-8") from error
-    count = 0
-    in_record = False
-    for line in text.splitlines():
-        if line == START_MARKER:
-            if in_record:
-                raise VerificationError("ledger baseline contains a nested run start marker")
-            in_record = True
-        elif line == END_MARKER:
-            if not in_record:
-                raise VerificationError("ledger baseline contains an orphaned run end marker")
-            in_record = False
-            count += 1
-    if in_record:
-        raise VerificationError("ledger baseline contains an unterminated run start marker")
-    return count
-
-
-def validate_record_chronology(record: str, expected_ordinal: int) -> None:
-    sections = markdown_sections(record)
-    ordinal = unique_section(sections, "Run ordinal")
-    if not re.fullmatch(r"[1-9]\d*", ordinal):
-        raise VerificationError("run ordinal must be a positive decimal integer")
-    if int(ordinal) != expected_ordinal:
-        raise VerificationError(
-            f"run ordinal must equal baseline record count plus one ({expected_ordinal})"
-        )
-
-    progress = unique_section(sections, "Progress")
-    steps: list[int] = []
-    for line in progress.splitlines():
-        match = PROGRESS_RE.fullmatch(line)
-        if not match:
-            raise VerificationError(
-                "progress must contain only non-empty ordered '- step-N — ...' bullets"
-            )
-        steps.append(int(match.group(1)))
-    if steps != list(range(1, len(steps) + 1)):
-        raise VerificationError("progress steps must start at step-1 and be contiguous in order")
-
-
-def parse_checkpoints(section: str) -> list[int]:
-    checkpoints: list[tuple[str, int]] = []
-    for line in section.splitlines():
-        match = CHECKPOINT_RE.fullmatch(line)
-        if not match:
-            raise VerificationError(
-                "confidence checkpoints must contain only complete checkpoint lines"
-            )
-        value = int(match.group(2))
-        if value > 100:
-            raise VerificationError("checkpoint confidence must be between 0% and 100%")
-        checkpoints.append((match.group(1), value))
-
-    labels = [label for label, _ in checkpoints]
-    if len(labels) < 2 or labels[0] != "initial" or labels[-1] != "final":
-        raise VerificationError(
-            "confidence checkpoints require initial first and final last"
-        )
-    expected = ["initial"]
-    expected.extend(f"milestone-{number}" for number in range(1, len(labels) - 1))
-    expected.append("final")
-    if labels != expected:
-        raise VerificationError(
-            "confidence checkpoint milestones must be unique, contiguous, and ordered"
-        )
-    return [value for _, value in checkpoints]
-
-
-def record_confidence(
-    record: str, status: str, confidence: int, expected_ordinal: int
-) -> None:
-    sections = markdown_sections(record)
-    validate_record_chronology(record, expected_ordinal)
-    ledger_status = unique_section(sections, "Status")
-    confidence_names = [
-        name for name in ("Reported confidence", "Confidence") if sections.get(name)
-    ]
-    if len(confidence_names) != 1:
-        raise VerificationError("run record must contain one reported confidence section")
-    ledger_confidence = parse_percentage(
-        unique_section(sections, confidence_names[0]), "ledger confidence"
-    )
-    if ledger_status != status or ledger_confidence != confidence:
-        raise VerificationError("response status or confidence disagrees with ledger")
-    unique_section(sections, "Validation")
-    checkpoint_section = unique_section(sections, "Confidence checkpoints")
-    values = parse_checkpoints(checkpoint_section)
-    if min(values) != confidence:
-        raise VerificationError("reported confidence must equal the minimum run checkpoint")
-
-
 def verify_ledgers(
-    root: Path, baseline: dict[str, str], ledger: Path, ledger_name: str, status: str, confidence: int
+    root: Path, baseline: dict[str, str], ledger: Path, ledger_name: str
 ) -> None:
     baseline_bytes = decode(baseline[ledger_name]) if ledger_name in baseline else b""
     current_bytes = ledger.read_bytes()
     if not current_bytes.startswith(baseline_bytes):
         raise VerificationError("reported ledger is not append-only")
-    expected_ordinal = baseline_record_count(baseline_bytes) + 1
-    record = extract_record(current_bytes[len(baseline_bytes) :], ledger_name not in baseline)
-    record_confidence(record, status, confidence, expected_ordinal)
+    extract_record(current_bytes[len(baseline_bytes) :], ledger_name not in baseline)
 
     _, current = snapshot(root)
     allowed_names = set(baseline) | {ledger_name}
@@ -474,22 +357,17 @@ def stop(payload: dict[str, Any]) -> dict[str, str]:
     if not isinstance(session_id, str) or not session_id:
         raise VerificationError("stop payload is missing sessionId")
     root = repository_root(payload.get("cwd"))
-    marker, run_file = paths_for(root, session_id)
-    if not marker.is_file() or not run_file.is_file():
+    state = active_state(root)
+    if state is None or state["sessionId"] != session_id:
         raise VerificationError("no start state exists for this implementer session")
-    try:
-        state = json.loads(run_file.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise VerificationError("start state is unreadable") from error
-    if state.get("root") != str(root) or state.get("sessionId") != session_id:
-        raise VerificationError("start state does not match this repository and session")
+    marker, run_file = paths_for(root, session_id)
 
-    status, confidence, reported = parse_response(payload.get("response"))
+    _, reported = parse_response(payload.get("response"))
     ledger, ledger_name = resolve_ledger(root, reported)
     verify_documents(root, state["documents"])
-    verify_ledgers(root, state["ledgers"], ledger, ledger_name, status, confidence)
-    run_file.unlink()
+    verify_ledgers(root, state["ledgers"], ledger, ledger_name)
     marker.unlink()
+    run_file.unlink()
     return decision(True)
 
 

@@ -516,7 +516,7 @@ class VerifierTests(unittest.TestCase):
 
         self.assert_blocked(self.call_stop(self.response()), "unreported ledger changed")
 
-    def test_stop_accepts_append_to_opaque_legacy_record_with_count_plus_one(self):
+    def test_stop_accepts_append_to_opaque_legacy_content(self):
         legacy = (
             "# Previous runs\n"
             "Legacy timestamps and bodies are not validated.\n"
@@ -536,83 +536,39 @@ class VerifierTests(unittest.TestCase):
         ))
         self.assertEqual(baseline, path.read_bytes()[:len(baseline)])
 
-    def test_baseline_record_count_accepts_preamble_and_complete_legacy_records(self):
-        baseline = (
-            "arbitrary preamble\n"
-            f"inline {verifier.START_MARKER} is content\n"
-            f"{verifier.START_MARKER}\nlegacy body\n{verifier.END_MARKER}\n"
-            "content between records\n"
-            f"{verifier.START_MARKER}\nanything\n{verifier.END_MARKER}\n"
-        ).encode()
-        self.assertEqual(2, verifier.baseline_record_count(baseline))
-
-    def test_baseline_record_count_rejects_malformed_exact_marker_ordering(self):
-        malformed = {
-            "orphaned": f"{verifier.END_MARKER}\n",
-            "reversed": f"{verifier.END_MARKER}\n{verifier.START_MARKER}\n",
-            "nested": (
-                f"{verifier.START_MARKER}\n{verifier.START_MARKER}\n"
-                f"{verifier.END_MARKER}\n"
-            ),
-            "unterminated": f"{verifier.START_MARKER}\nlegacy body\n",
-            "orphan_after_complete": (
-                f"{verifier.START_MARKER}\n{verifier.END_MARKER}\n"
-                f"{verifier.END_MARKER}\n"
-            ),
-        }
-        for name, baseline in malformed.items():
-            with self.subTest(name=name):
-                with self.assertRaisesRegex(verifier.VerificationError, "ledger baseline"):
-                    verifier.baseline_record_count(baseline.encode())
-
-    def test_record_chronology_rejects_invalid_ordinals(self):
-        valid = self.record().split(verifier.START_MARKER, 1)[1]
-        invalid = {
-            "missing": valid.replace("## Run ordinal\n1\n\n", ""),
-            "empty": valid.replace("## Run ordinal\n1", "## Run ordinal\n"),
-            "duplicate": valid.replace(
-                "## Run ordinal\n1\n\n",
-                "## Run ordinal\n1\n\n## Run ordinal\n1\n\n",
-            ),
-            "zero": valid.replace("## Run ordinal\n1", "## Run ordinal\n0"),
-            "negative": valid.replace("## Run ordinal\n1", "## Run ordinal\n-1"),
-            "non_decimal": valid.replace("## Run ordinal\n1", "## Run ordinal\none"),
-            "wrong": valid.replace("## Run ordinal\n1", "## Run ordinal\n2"),
-            "extra_prose": valid.replace("## Run ordinal\n1", "## Run ordinal\n1\nextra"),
-        }
-        for name, record in invalid.items():
-            with self.subTest(name=name):
-                with self.assertRaises(verifier.VerificationError):
-                    verifier.validate_record_chronology(record, 1)
-
-    def test_record_chronology_accepts_multiple_ordered_progress_steps(self):
-        record = self.record(
-            progress=(
-                "- step-1 — inspected baseline\n"
-                "- step-2 — implemented checks\n"
-                "- step-3 — ran tests"
-            )
+    def test_stop_accepts_record_without_semantic_sections(self):
+        self.start()
+        self.write_ledger(
+            f"{verifier.START_MARKER}\nimplementation notes\n{verifier.END_MARKER}\n"
         )
-        verifier.validate_record_chronology(record, 1)
+        response = (
+            "## Status\ncompleted\n\n"
+            "## Ledger\n"
+            "docs/artifacts/implementationdocs/ledgers/run.ledger.md\n"
+        )
 
-    def test_record_chronology_rejects_invalid_progress(self):
+        self.assertEqual(
+            {"decision": "allow"}, verifier.stop(self.payload(response=response))
+        )
+
+    def test_stop_rejects_empty_or_multiple_appended_records(self):
         cases = {
-            "timestamp": "- 2026-07-30T21:58:35Z — implemented",
-            "malformed": "- step-one — implemented",
-            "duplicate": "- step-1 — first\n- step-1 — again",
-            "gap": "- step-1 — first\n- step-3 — third",
-            "reordered": "- step-2 — second\n- step-1 — first",
-            "empty": "- step-1 — ",
-            "extra_prose": "- step-1 — first\nnot a bullet",
-            "blank_line": "- step-1 — first\n\n- step-2 — second",
-            "wrong_separator": "- step-1 - first",
-            "zero": "- step-0 — first",
+            "empty": f"{verifier.START_MARKER}\n{verifier.END_MARKER}\n",
+            "multiple": (
+                f"{verifier.START_MARKER}\nfirst\n{verifier.END_MARKER}\n"
+                f"{verifier.START_MARKER}\nsecond\n{verifier.END_MARKER}\n"
+            ),
         }
-        for name, progress in cases.items():
+        for name, record in cases.items():
             with self.subTest(name=name):
-                record = self.record(progress=progress)
-                with self.assertRaises(verifier.VerificationError):
-                    verifier.validate_record_chronology(record, 1)
+                with tempfile.TemporaryDirectory() as temporary:
+                    base = Path(temporary)
+                    repo, _, ledgers = self.make_repository(base)
+                    payload = self.payload(cwd=str(repo), sessionId=name)
+                    verifier.start(payload)
+                    (ledgers / "run.ledger.md").write_text(record, encoding="utf-8")
+                    with self.assertRaises(verifier.VerificationError):
+                        verifier.stop(payload | {"response": self.response()})
 
     def test_blocked_stop_retains_state_and_can_continue(self):
         self.start()
@@ -623,6 +579,45 @@ class VerifierTests(unittest.TestCase):
         self.assertEqual(
             {"decision": "allow"}, verifier.stop(self.payload(response=self.response()))
         )
+
+    def test_stop_rejects_state_not_owned_by_active_marker(self):
+        self.start()
+        _, stale_run = verifier.paths_for(self.repo.resolve(), "stale-session")
+        stale_state = {
+            "root": str(self.repo.resolve()),
+            "sessionId": "stale-session",
+            "documents": verifier.snapshot(self.repo)[0],
+            "ledgers": verifier.snapshot(self.repo)[1],
+        }
+        verifier.write_private_state(stale_run, json.dumps(stale_state))
+        self.write_ledger()
+        stale_payload = self.payload(sessionId="stale-session", response=self.response())
+
+        with self.assertRaisesRegex(verifier.VerificationError, "no start state"):
+            verifier.stop(stale_payload)
+
+        marker, _ = verifier.paths_for(self.repo.resolve(), self.session)
+        self.assertTrue(marker.exists())
+
+    def test_stop_releases_marker_before_removing_run_state(self):
+        self.start()
+        self.write_ledger()
+        marker, run_file = verifier.paths_for(self.repo.resolve(), self.session)
+        original_unlink = Path.unlink
+
+        def fail_run_unlink(path, *args, **kwargs):
+            if path == run_file:
+                raise OSError("forced run cleanup failure")
+            return original_unlink(path, *args, **kwargs)
+
+        with mock.patch.object(Path, "unlink", fail_run_unlink):
+            with self.assertRaisesRegex(OSError, "forced run cleanup failure"):
+                verifier.stop(self.payload(response=self.response()))
+
+        self.assertFalse(marker.exists())
+        self.assertTrue(run_file.exists())
+        next_payload = self.payload(sessionId="session-2")
+        self.assertEqual({"decision": "allow"}, verifier.start(next_payload))
 
     def call_stop(self, response):
         try:
@@ -829,139 +824,32 @@ class VerifierTests(unittest.TestCase):
         self.write_ledger()
         duplicate = self.response() + "\n## Status\ncompleted\n"
         self.assert_blocked(self.call_stop(duplicate), "one non-empty ## Status")
-        malformed = self.response().replace("## Confidence", "### Confidence")
+        malformed = self.response().replace("## Status", "### Status")
         self.assert_blocked(self.call_stop(malformed))
 
-    def test_stop_rejects_status_and_confidence_disagreement(self):
+    def test_stop_ignores_confidence_and_ledger_semantics(self):
+        self.start()
+        record = self.record(
+            status="blocked",
+            confidence=140,
+            ordinal=99,
+            progress="free-form progress",
+            checkpoint_lines="not a checkpoint",
+        )
+        self.write_ledger(record.replace("## Validation", "## Notes"))
+
+        self.assertEqual(
+            {"decision": "allow"},
+            verifier.stop(self.payload(response=self.response(status="completed"))),
+        )
+
+    def test_stop_rejects_unknown_status(self):
         self.start()
         self.write_ledger()
+
         self.assert_blocked(
-            self.call_stop(self.response(status="blocked")), "disagrees"
+            self.call_stop(self.response(status="in progress")), "not allowed"
         )
-
-    def test_stop_rejects_missing_checkpoints_and_wrong_minimum(self):
-        self.start()
-        self.write_ledger(self.record().replace("initial", "milestone-1"))
-        self.assert_blocked(self.call_stop(self.response()), "initial first and final last")
-
-    def test_stop_rejects_missing_confidence_checkpoints_section(self):
-        self.start()
-        self.write_ledger(
-            self.record().replace(
-                "## Confidence checkpoints", "## Checkpoint evidence"
-            )
-        )
-        self.assert_blocked(
-            self.call_stop(self.response()), "one non-empty ## Confidence checkpoints"
-        )
-
-    def test_stop_rejects_duplicate_confidence_checkpoints_sections(self):
-        self.start()
-        duplicated = self.record().replace(
-            "## Confidence checkpoints\n"
-            "- confidence: initial — 94% — grounded in design\n"
-            "- confidence: final — 90% — validation passed",
-            "## Confidence checkpoints\n"
-            "- confidence: initial — 94% — grounded in design\n\n"
-            "## Confidence checkpoints\n"
-            "- confidence: final — 90% — validation passed",
-        )
-        self.write_ledger(duplicated)
-        self.assert_blocked(
-            self.call_stop(self.response()), "one non-empty ## Confidence checkpoints"
-        )
-
-    def test_stop_rejects_checkpoint_minimum_disagreement(self):
-        self.start()
-        self.write_ledger(self.record(checkpoints=(95, 92)))
-        self.assert_blocked(self.call_stop(self.response()), "minimum")
-
-    def test_stop_accepts_strict_initial_contiguous_milestones_and_final(self):
-        self.start()
-        self.write_ledger(
-            self.record(
-                checkpoint_lines=(
-                    "- confidence: initial — 96% — design is explicit\n"
-                    "- confidence: milestone-1 — 93% — parser implemented\n"
-                    "- confidence: milestone-2 — 91% — negatives covered\n"
-                    "- confidence: final — 90% — suite passed"
-                )
-            )
-        )
-        self.assertEqual(
-            {"decision": "allow"}, verifier.stop(self.payload(response=self.response()))
-        )
-
-    def test_stop_rejects_every_malformed_checkpoint_section_line(self):
-        valid_initial = "- confidence: initial — 94% — grounded in design"
-        valid_final = "- confidence: final — 90% — validation passed"
-        cases = {
-            "blank": f"{valid_initial}\n\n{valid_final}",
-            "prose": f"{valid_initial}\ncheckpoint pending\n{valid_final}",
-            "wrong_prefix": f"{valid_initial}\n* confidence: milestone-1 — 91% — done\n{valid_final}",
-            "missing_colon": f"{valid_initial}\n- confidence milestone-1 — 91% — done\n{valid_final}",
-            "bad_separator": f"{valid_initial}\n- confidence: milestone-1 : 91% — done\n{valid_final}",
-            "missing_percent": f"{valid_initial}\n- confidence: milestone-1 — 91 — done\n{valid_final}",
-            "missing_rationale": f"{valid_initial}\n- confidence: milestone-1 — 91% — \n{valid_final}",
-        }
-        for name, checkpoint_lines in cases.items():
-            with self.subTest(name=name):
-                with self.assertRaisesRegex(
-                    verifier.VerificationError, "complete checkpoint lines"
-                ):
-                    verifier.parse_checkpoints(checkpoint_lines)
-
-    def test_stop_rejects_invalid_checkpoint_label_ordering(self):
-        line = lambda label: f"- confidence: {label} — 90% — evidence"
-        cases = {
-            "duplicate_initial": ["initial", "initial", "final"],
-            "duplicate_final": ["initial", "final", "final"],
-            "duplicate_milestone": ["initial", "milestone-1", "milestone-1", "final"],
-            "gap": ["initial", "milestone-2", "final"],
-            "reordered": ["initial", "milestone-2", "milestone-1", "final"],
-            "milestone_after_final": ["initial", "final", "milestone-1"],
-            "initial_not_first": ["milestone-1", "initial", "final"],
-            "missing_initial": ["milestone-1", "final"],
-            "missing_final": ["initial", "milestone-1"],
-            "milestone_zero": ["initial", "milestone-0", "final"],
-            "milestone_leading_zero": ["initial", "milestone-01", "final"],
-        }
-        for name, labels in cases.items():
-            with self.subTest(name=name):
-                with self.assertRaises(verifier.VerificationError):
-                    verifier.parse_checkpoints("\n".join(map(line, labels)))
-
-    def test_malformed_low_confidence_milestone_cannot_be_ignored(self):
-        self.start()
-        self.write_ledger(
-            self.record(
-                checkpoint_lines=(
-                    "- confidence: initial — 94% — grounded in design\n"
-                    "- confidence: milestone-1: 20% — malformed separator\n"
-                    "- confidence: final — 90% — validation passed"
-                )
-            )
-        )
-        self.assert_blocked(
-            self.call_stop(self.response()), "complete checkpoint lines"
-        )
-
-    def test_confidence_policy(self):
-        self.start()
-        self.write_ledger(self.record(status="blocked", confidence=70, checkpoints=(80, 70)))
-        self.assert_blocked(
-            self.call_stop(self.response(status="completed", confidence=70)),
-            "requires blocked",
-        )
-        valid = self.response(
-            status="blocked",
-            confidence=70,
-            extras=(
-                "## Low-confidence reason\nEvidence is incomplete.\n\n"
-                "## Clarifications needed\nConfirm the payload.\n\n"
-            ),
-        )
-        self.assertEqual({"decision": "allow"}, verifier.stop(self.payload(response=valid)))
 
     def test_pre_tool_denies_docs_and_allows_ledgers_and_unrelated_paths(self):
         self.start()
