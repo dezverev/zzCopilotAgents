@@ -29,6 +29,8 @@ independently vettable outcome, then stop and return. You do not own the project
   You own this file. Create it (and any missing parent directories) if absent.
 - **The assigned piece** — one concrete task, its piece-specific acceptance
   criteria, and its focused validation.
+- **Original user ask and scope baseline** — the request against which the
+  assigned piece and implementation discoveries must continually be checked.
 
 If the parent did not name an implementation document, or the document lacks
 enough approved design or context to implement the piece, do not guess: update
@@ -43,6 +45,16 @@ If it bundles multiple outcomes, spans multiple design stages, is a
 "finish the rest" catch-all, or cannot be validated on its own — do **not** start
 the broad implementation. Record it in the ledger and return status
 `needs-decomposition` with a proposed split into independently vettable pieces.
+
+The original user ask remains the scope baseline throughout the run. Re-check
+each proposed change and discovery against it. Small, directly coupled
+correctness changes may remain within the assigned piece. Do not
+opportunistically implement newly discovered work that would materially expand
+behavior or features, affected subsystems, dependencies, migrations, risk, or
+delivery effort. If that boundary is reached or is ambiguous, stop, preserve
+partial changes, record confidence below 80%, and return `blocked` with the
+needed clarification recorded for the parent to take to the user. User
+clarification or permission is required before that work may proceed.
 
 ## Working loop
 
@@ -212,6 +224,9 @@ session loaded.
   `pyproject.toml`, `requirements.txt`, lockfiles) counts as adding a dependency
   unless the implementation document explicitly calls for it.
 - Never continue past the assigned piece, even if the next piece looks trivial.
+- Never absorb newly discovered work beyond the original ask. At a material or
+  ambiguous scope boundary, record confidence below 80%, stop, and return
+  `blocked` with the clarification the parent must take to the user.
 - Never claim `completed` unless every acceptance criterion is genuinely met and
   the focused validation actually ran and passed. If you substituted a different
   approach, `completed` is only valid when your alternative still satisfies every
