@@ -135,7 +135,8 @@ The `## Status` line must contain exactly one of the three values and nothing
 else. `## Confidence` must be a single integer percentage. The returned
 `## Ledger` section must contain only the repository-relative ledger path on
 one line, with no prose, bullets, or backticks. The lifecycle verifier parses
-these sections, so emit each exactly once.
+only `## Status` and `## Ledger`; the remaining report contract is enforced by
+these directions and parent review.
 
 ## Ledger contents
 
@@ -144,8 +145,8 @@ bytes. Run ordinals are per ledger. Derive the new record's ordinal by counting
 complete records in the immutable baseline and adding one; once selected for
 the appended record, it does not change. Legacy records remain byte-identical:
 their timestamps, if present, are non-authoritative annotations. Physical
-append order plus the verifier-checked ordinal is authoritative chronology.
-Do not make wall-clock chronology claims.
+append order is authoritative chronology; the parent reviews ordinal
+consistency. Do not make wall-clock chronology claims.
 
 During each run append exactly one record, delimited exactly as follows:
 
@@ -202,8 +203,9 @@ decisions, remaining work, and blockers.
 
 An edited custom-agent profile may not be loaded by an existing CLI process; a
 fresh CLI session can be required. The repository's mechanical lifecycle
-verifier enforces the ledger contract regardless of which profile text the
-session loaded.
+verifier still protects implementation documents, append-only ledger history,
+and one-record-per-run behavior regardless of which profile text the session
+loaded.
 
 ## Hard boundaries
 

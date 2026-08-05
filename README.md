@@ -20,8 +20,8 @@ The brainstormer/designplanner prompts still need tuning. Sometimes they trigger
 Repository policy lives in `AGENTS.md` and
 `.github/copilot-instructions.md`. The files contain the same marked delegation
 contract. `.github/hooks/zz-implementer.json` protects implementation documents
-and append-only ledgers, checks status and confidence consistency, and permits
-only one implementer at a time.
+and append-only ledgers, requires one delimited run record, and permits only one
+implementer at a time.
 
 All agents use Copilot's native repository tools. Profiles do not pin a model;
 use `/model` and `/subagents` in Copilot CLI to configure model selection.
@@ -100,11 +100,13 @@ python3 -m unittest discover -s tests/hooks -p 'test_*.py'
   research grounding, live-tree feasibility, and consistency/severity.
 
 The implementer hook snapshots implementation documents and ledgers outside the
-repository. It rejects changed implementation documents, malformed or
-non-append-only ledgers, invalid run ordinals or progress records, inconsistent
-status/confidence, and overlapping implementer runs. These checks enforce
-workflow structure; they do not replace review or create a security boundary
-against hostile processes running as the same OS user.
+repository. It rejects changed implementation documents, rewritten ledger
+history, missing, empty, or multiple appended run records, invalid status or
+ledger handoff fields, and overlapping implementer runs. Run ordinal, progress,
+confidence, and validation quality remain agent-direction and parent-review
+responsibilities. These checks enforce workflow structure; they do not replace
+review or create a security boundary against hostile processes running as the
+same OS user.
 
 See [docs/copilot-native-agents.md](docs/copilot-native-agents.md) for the
 design and full enforcement model.
