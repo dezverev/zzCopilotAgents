@@ -57,7 +57,20 @@ preserve deliberate blindness; the parent compares the reports.
 `docs/artifacts/implementationdocs/`. The parent assigns one medium-to-small,
 independently testable piece to `zz-implementer`, reviews its diff and ledger,
 and validates it before assigning another piece. Parallel implementers are
-prohibited even though Copilot supports parallel subagents.
+prohibited even though Copilot supports parallel subagents. The implementer is
+the sole write-capable delegated specialist, not the sole writer: the parent
+directly handles small, localized, low-risk edits and focused follow-up fixes
+from vetter feedback. Delegation is reserved for approved-design work deep
+enough to warrant the implementation-document and ledger ceremony.
+
+**Original-ask scope guard.** The original user ask remains the scope baseline
+throughout implementation. Small, directly coupled correctness changes can
+remain in scope. Proposed work that materially expands behavior or features,
+affected subsystems, dependencies, migrations, risk, or delivery effort pauses
+for an explanation and user clarification or permission; ambiguity is resolved
+by asking. At that boundary, `zz-implementer` records confidence below 80%,
+stops, and returns blocked with the needed clarification rather than
+opportunistically implementing newly discovered out-of-scope work.
 
 **Markdown handoffs with a machine-checked ledger.** Human-readable reports use
 stable Markdown sections. Each implementation run appends one delimited record
@@ -177,8 +190,10 @@ It defines role selection, requires explicit solution choice before design,
 reserves brainstorming and design planning for architecture-level work, makes
 the scout the default for ambiguous initial exploration, keeps
 implementation pieces bounded, preserves three-lens verification, and leaves
-routine decisions, decomposition, sequencing, document maintenance between
-runs, integration, final verification, and all git operations with the parent.
+routine decisions, small direct edits, decomposition, sequencing, review,
+document maintenance between runs, integration, final verification, and all git
+operations with the parent. It also requires continual comparison with the
+original ask and user approval before material scope expansion.
 
 The repository-root `AGENTS.md` carries the same marked contract for tools that
 discover root agent guidance. The surrounding introductions may differ, but an

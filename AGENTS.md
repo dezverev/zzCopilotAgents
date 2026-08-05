@@ -23,7 +23,16 @@ The parent must also inspect the repository before delegating.
 | Challenge an important plan, diff, or completion claim | `zz-vetter` x3 |
 
 Use agents deliberately, not as a mandatory pipeline. The parent handles
-routine development decisions and small changes directly.
+routine development decisions and may write files directly for small,
+localized, low-risk changes, including focused follow-up fixes from vetter
+feedback.
+
+The original user ask is the scope baseline throughout implementation. Re-check
+proposed work against it as implementation proceeds. Small, directly coupled
+correctness changes may remain in scope. A material expansion in behavior or
+features, affected subsystems, dependencies, migrations, risk, or delivery
+effort must pause and be explained to the user; obtain the user's clarification
+or permission before proceeding, and ask when the boundary is ambiguous.
 
 ### Role rules
 
@@ -87,13 +96,16 @@ when new evidence invalidates the overall direction and requires redesign.
 uncertain. Include the failure, reproduction command, output, and relevant
 paths. The parent decides whether to apply its recommended fix.
 
-**`zz-implementer`** is the only agent that edits files. Before calling it:
+**`zz-implementer`** is the sole write-capable delegated specialist, not the
+sole writer including the parent. Reserve it for one bounded piece of
+approved-design work whose depth or scope warrants the implementation-document
+and ledger ceremony. Before calling it:
 
 1. Create a non-empty implementation document under
    `docs/artifacts/implementationdocs/` with context, approved design,
    invariants, touchpoints, stages, acceptance criteria, risks, and validation.
 2. Assign exactly one medium-to-small, independently reviewable piece with
-   focused acceptance criteria and validation.
+   the original ask, focused acceptance criteria, and validation.
 3. Run only one implementer at a time repository-wide.
 
 Never assign an entire feature, multiple stages, or "finish the rest." After
@@ -111,6 +123,12 @@ If status is `needs-decomposition`, split the piece. If it is `blocked`,
 confidence is below 80%, or status/confidence is malformed, resolve the issue
 and redispatch a fresh implementer for the same bounded piece.
 
+The implementer must compare discoveries with the original ask and stop at a
+material scope boundary. It reports newly discovered out-of-scope work as
+blocked with the clarification needed; the parent explains the expansion and
+obtains user permission rather than letting implementation absorb it
+opportunistically.
+
 The lifecycle hooks mechanically protect cooperative workflows, not against a
 hostile process running as the same OS user. Continue to review every handoff.
 A changed agent profile may require a fresh CLI session.
@@ -127,7 +145,12 @@ search terms, and known concerns. Vetters report findings; they do not edit.
 
 ### Shared constraints
 
-- Only `zz-implementer` may write files.
+- `zz-readagent`, `zz-brainstormer`, `zz-designplanner`, `zz-debugger`, and
+  `zz-vetter` remain read-only. Among delegated specialists, only
+  `zz-implementer` may write files; the parent retains the direct-edit authority
+  described above.
+- `zz-implementer` stops and escalates rather than crossing a material boundary
+  beyond the original ask.
 - No agent performs git mutations.
 - Every agent receives explicit paths, symbols, constraints, and prior findings;
   agents start without the parent's conversation context.

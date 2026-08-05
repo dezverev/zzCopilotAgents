@@ -34,16 +34,46 @@ use `/model` and `/subagents` in Copilot CLI to configure model selection.
 
 ## Install
 
-Copy the contents of this repository's `.github/` directory into your
-repository's `.github/` directory, then restart Copilot.
+### 1. Verify the hook runtime
+
+On Linux or macOS, run:
+
+```sh
+python3 -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)"
+```
+
+On Windows, run in PowerShell:
+
+```powershell
+python -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)"
+```
+
+Do not proceed unless the command for your platform is found and exits
+successfully. If it is missing or fails, install Python 3.10 or newer from
+[python.org](https://www.python.org/downloads/) or your platform's package
+manager, ensure `python3` (Linux/macOS) or `python` (Windows) is on `PATH`,
+restart your shell, and rerun the check.
+
+### 2. Copy the runtime files
+
+After the check succeeds, copy the required contents of this repository's
+`.github/` directory into your repository's `.github/` directory, then restart
+Copilot. This runtime payload consists of the agent profiles, hook
+configuration and scripts, and repository guidance under `.github/`. Project
+development assets such as `tests/` and `docs/` are not part of installation;
+end users should neither copy them nor run the repository tests to install the
+agents.
 
 Alternatively, give Copilot the
 [repository URL](https://github.com/dezverev/zzCopilotAgents) and ask it to
-install the agents.
+verify Python 3.10 or newer with the platform-appropriate command above, stop
+and provide install or `PATH` guidance if verification fails, and install only
+the required runtime files from `.github/`.
 
-## Test
+## Contributor verification
 
-Test the source package:
+These source-repository tests are for contributors. End users do not copy or
+run them as part of installation.
 
 ```sh
 python3 -m unittest discover -s tests/agents -p 'test_*.py'
